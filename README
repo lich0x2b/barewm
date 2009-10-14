@@ -6,7 +6,7 @@ For people who only use GNU Screen, Firefox  and/or Emacs all day long, it's rea
 
 Shouts to:
 - dimigon ( thanks for the sighandler part :) and some other coding stuff I learned after your submitted patch )
--
+- wonder  ( thanks for the help with PKGBUILD )
 INSTALL
 
 $ vim conf.h
