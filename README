@@ -35,7 +35,7 @@ echo -n "$INFO"
 USAGE
 Configuration is done by modifying the conf.h file and recompiling.
 The default keybindings are:
-- MOD = Left WIN key
+- MOD = Left ALT key
 - MOD + t : enter command mode
 All following keys are issued when in command mode
 - c : spawn terminal (defaults to urxvt)
