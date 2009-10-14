@@ -9,8 +9,6 @@ Shouts to:
 -
 INSTALL
 
-$ tar -xvf barewm-0.2.tar.gz
-$ cd barewm-0.2
 $ vim conf.h
 < edit settings / keys / colors >
 $ make
