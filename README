@@ -1,0 +1,63 @@
+Bare WM - A minimal fullscreen window manager for Linux
+
+Bare WM is a full screen window manager aimed at those who spend their day cycling through windows instead of having 10 onscreen at a time.
+It's a dumbed down version of Ratpoison's default behaviour (all windows open in fullscreen, with no ability to resize,just to cycle through).
+For people who only use GNU Screen, Firefox  and/or Emacs all day long, it's really useful as it lets you use every free pixel of the screen.
+
+Shouts to:
+- dimigon ( thanks for the sighandler part :) and some other coding stuff I learned after your submitted patch )
+-
+INSTALL
+
+$ tar -xvf barewm-0.2.tar.gz
+$ cd barewm-0.2
+$ vim conf.h
+< edit settings / keys / colors >
+$ make
+$ sudo make install
+
+RUNNING
+
+$ vim ~/.xinitrc
+exec xsetroot -cursor_name left_ptr -solid "Gray50" &
+exec barewm
+$ startx
+
+example short-info.sh - create this, make it executable (chmod +x) and put it somewhere in your search path
+-- cut here --
+#!/bin/sh
+TEMP=$(cat /proc/acpi/thermal_zone/THRM/temperature | awk '{print $2"C"}')
+FREQ=$(cpufreq-info | awk '/current CPU frequency/ {print $5"MHz"}')
+DATE=$(echo -n $(date +%B,\ %d\ -\ %I:%M\ %p))
+SDA2=$(df -h | awk '/sda2/ {print $4"/"$2}')
+INFO=$(echo -n "Storage: $SDA2 :: CPUFreq: $FREQ :: Temperature $TEMP :: $DATE")
+echo -n "$INFO"
+-- cut here --
+
+USAGE
+Configuration is done by modifying the conf.h file and recompiling.
+The default keybindings are:
+- MOD = Left WIN key
+- MOD + t : enter command mode
+All following keys are issued when in command mode
+- c : spawn terminal (defaults to urxvt)
+- w : display window list
+- q : kill selected window
+- m : spawn launcher menu program (by default it uses dmenu)
+- p : select previous window
+- n : select next window
+- s : show message containing output from the command defined at as STATUS in conf.h
+
+TODO
+1. Handle the timeout better.
+2. Custom key bindings. Working on implementing message and spawn bindings for now.
+   Useful if you want to set bindings to run your own scripts, for example to display system stats or whatnot
+   using the built-in messaging system.
+3. Maybe (MAYBE!) splitting. Atleast a 2 frame vertical splitting would be in order if I pursue this.
+4. Named virtual workspaces
+5. < to come >
+
+NEWS:
+
+29.04.2009 - Added a status feature (outputs the result from the command defined at STATUS)
+           - Added options for custom cursors (only ones found in X11/cursorfont.h)
