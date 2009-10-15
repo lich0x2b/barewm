@@ -11,11 +11,13 @@
 #include <X11/cursorfont.h>
 #include <ctype.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 
-#define DEBUG 0
+#define DEBUG 1
+void catch_timer(int signal);
 
-Display 		* display;
+Display 		*display;
 Window 			root;
 Screen 			*screen;
 int 			SCREEN_WIDTH;
@@ -52,6 +54,15 @@ int get_prev_window();
 int get_next_window();
 void message(const char *text, ...);
 void echo_output(char *cmd);
+
+Window MESSAGE = None;
+
+void catch_timer(int signal)
+{   
+    LOG_DEBUG("Timer finished, closing window!\n");
+	XDestroyWindow(display, MESSAGE);
+    XFlush(display);
+}
 
 void LOG(const char *text, ...)
 {
@@ -195,13 +206,13 @@ void echo_output(char *cmd)
 void handle_keypress_event(XEvent * e)
 {
 	XEvent event;
-	XGrabKey(display, AnyKey, AnyModifier, root, True, GrabModeAsync, GrabModeAsync);
-        XMaskEvent (display, KeyPressMask, &event);
+	XGrabKey(display, AnyKey, AnyModifier, selected, True, GrabModeAsync, GrabModeAsync);
+    XMaskEvent (display, KeyPressMask, &event);
 	XDefineCursor(display, selected, (XCreateFontCursor(display, CURSOR)));
 	unsigned int key = XLookupKeysym((XKeyEvent *) &event, 0);
 	if (key >= '0' && key <= '9')
 	{
-		XUngrabKey(display, AnyKey, AnyModifier, root);
+		XUngrabKey(display, AnyKey, AnyModifier, selected);
 		grab_keyboard();
 		select_window(key - '0');
 		return;
@@ -224,7 +235,7 @@ void handle_keypress_event(XEvent * e)
 			}			
 			break;
 		case KEY_KILL:
-			XDestroyWindow(display, selected);
+			XKillClient(display, selected);
 			selected = root;
 			break;
 		case KEY_PREV:
@@ -242,11 +253,11 @@ void handle_keypress_event(XEvent * e)
 				message("Can't access next window!");
 			}
 			break;
-                default:
-                        message("Key \"%c\" is unbound!", (char)key);
+            default:
+                    message("Key \"%c\" is unbound!", (char)key);
 	}
 
-	XUngrabKey(display, AnyKey, AnyModifier, root);
+	XUngrabKey(display, AnyKey, AnyModifier, selected);
 	grab_keyboard();
 	XSetInputFocus (display, selected, RevertToParent, CurrentTime);
 }
@@ -291,27 +302,21 @@ void message(const char *text, ...)
 				win_y = PADDING_NORTH;
 				break;
 		}
-	Window message_window = XCreateSimpleWindow(display, root, win_x,  win_y, win_width, win_height, BORDER, name2color(FGCOLOR), name2color(BGCOLOR));
-	XSetWindowBorderWidth(display, message_window, BORDER);		
-	XSetWindowBorder(display, message_window, name2color(SELBGCOLOR));		
-	XMapRaised(display, message_window);
-	XDrawString(display, message_window, BARE_GC, WLISTPADDING, 0 + th - fontstruct->max_bounds.descent, tmp, strlen(tmp));
-	XFlush(display);
-	sleep(TIMEOUT);
-	XFlush(display);
-	if(message_window)
-	{
-		XDestroyWindow(display, message_window);
-	}
+	MESSAGE = XCreateSimpleWindow(display, root, win_x,  win_y, win_width, win_height, BORDER, name2color(FGCOLOR), name2color(BGCOLOR));
+	XSetWindowBorderWidth(display, MESSAGE, BORDER);		
+	XSetWindowBorder(display, MESSAGE, name2color(FGCOLOR));		
+	XMapRaised(display, MESSAGE);
+	XDrawString(display, MESSAGE, BARE_GC, WLISTPADDING, 0 + th - fontstruct->max_bounds.descent, tmp, strlen(tmp));
+    signal(SIGALRM, catch_timer);
+    alarm(TIMEOUT); 
 }
 
 
 void list_windows()
 {
 	int th, ypos, x;
-        th = TextHeight(fontstruct);
+    th = TextHeight(fontstruct);
 	ypos = 0 + th - fontstruct->max_bounds.descent;
-	Window WINDOW_LIST_WINDOW = None;
 	char *tmp;
 	char title[256];
 	int number = 0;
@@ -330,12 +335,7 @@ void list_windows()
 					if(XFetchName(display, windows_container[x], &tmp))
 					{
 						number++;
-						if(windows_container[x] == selected)
-						{	
-							sprintf(title, "%d - %s", get_position(windows_container[x]), tmp);
-						} else {
-							sprintf(title, "%d - %s", get_position(windows_container[x]), tmp);
-						}
+						sprintf(title, "%d - %s", get_position(windows_container[x]), tmp);
 						if(strlen(title) > max_title) max_title = strlen(title);
 						title[0] = 0;	
 					}
@@ -374,10 +374,10 @@ void list_windows()
 				win_y = PADDING_NORTH;
 				break;
 		}
-		WINDOW_LIST_WINDOW = XCreateSimpleWindow(display, root, win_x,  win_y, win_width, win_height, BORDER, name2color(FGCOLOR), name2color(BGCOLOR));
-		XSetWindowBorderWidth(display, WINDOW_LIST_WINDOW, BORDER);		
-		XSetWindowBorder(display, WINDOW_LIST_WINDOW, name2color(SELBGCOLOR));		
-		XMapRaised(display, WINDOW_LIST_WINDOW);
+        MESSAGE = XCreateSimpleWindow(display, root, win_x,  win_y, win_width, win_height, BORDER, name2color(FGCOLOR), name2color(BGCOLOR));
+		XSetWindowBorderWidth(display, MESSAGE, BORDER);		
+		XSetWindowBorder(display, MESSAGE, name2color(SELBGCOLOR));		
+		XMapRaised(display, MESSAGE);
 
 		for (x = 0; x< max_windows; x++)
 		{
@@ -388,15 +388,14 @@ void list_windows()
 					{
 						if(XFetchName(display, windows_container[x], &tmp))
 						{
+							sprintf(title, "%d - %s", get_position(windows_container[x]), tmp);
 							if(windows_container[x] == selected)
 							{
-								sprintf(title, "%d - %s", get_position(windows_container[x]), tmp);
-								XFillRectangle(display, WINDOW_LIST_WINDOW, BARE_SELECTEDBG_GC, 0, ypos - th  + fontstruct->max_bounds.descent, win_width, th);
-								XDrawString(display, WINDOW_LIST_WINDOW, BARE_SELECTEDFG_GC, WLISTPADDING, ypos, title, strlen(title));
+								XFillRectangle(display, MESSAGE, BARE_SELECTEDBG_GC, 0, ypos - th  + fontstruct->max_bounds.descent, win_width, th);
+								XDrawString(display, MESSAGE, BARE_SELECTEDFG_GC, WLISTPADDING, ypos, title, strlen(title));
 								ypos+=th;
 							} else {
-								sprintf(title, "%d - %s", get_position(windows_container[x]), tmp);
-								XDrawString(display, WINDOW_LIST_WINDOW, BARE_GC, WLISTPADDING, ypos, title, strlen(title));
+								XDrawString(display, MESSAGE, BARE_GC, WLISTPADDING, ypos, title, strlen(title));
 								ypos+=th;
 							}
 						title[0] = 0;
@@ -404,13 +403,8 @@ void list_windows()
 					}
 			}
 		}
-		XFlush(display);
-		sleep(TIMEOUT);
-		XFlush(display);
-		if(WINDOW_LIST_WINDOW)
-		{
-			XDestroyWindow(display, WINDOW_LIST_WINDOW);
-		}
+        signal(SIGALRM, catch_timer);
+        alarm(3); 
 	} else {
 		message("No windows to list!");
 	}
@@ -426,6 +420,7 @@ int select_window(int window)
 		selected = windows_container[window];
 		return 0;
 	} else {
+		message("Window %d does not exist!", window);
 		return -1;
 	}
 }
@@ -529,6 +524,10 @@ void main_loop()
        		XNextEvent(display, &event);
        		switch(event.type){
 		case KeyPress:
+            if(MESSAGE)
+            {
+	            XDestroyWindow(display, MESSAGE);
+            }
 			if ((XKeycodeToKeysym(display, event.xkey.keycode, 0) == KEY_PREFIX) && (event.xkey.state & MOD_MASK))
 			{       
 				LOG_DEBUG("Switching to command mode\n");
