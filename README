@@ -67,7 +67,7 @@ NEWS:
 15.10.2009 - Wrote timeout handler, so it doesn't block when messages are displayed
            - Started working on a logo, I know it's soon but I need to practice my drawing skills :)
            - Started doing a complete clean-up of the code, especially the color handling
-16.10.2009 - Implemented most of methodz suggestions and code
+16.10.2009 - Implemented most of meth0dz' suggestions and code
            - Killing windows now selects the previous (or next, depending on the outcome
              of the previous selection) window.
            - at meth0dz's suggestion, I switched to C99, thus having to mess a bit with the
