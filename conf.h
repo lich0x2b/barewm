@@ -1,7 +1,7 @@
 #ifndef CONF_H
 #define CONF_H
 
-#define VERSION 	"0.2"
+#define VERSION 	"0.3"
 #define DISPLAY		":0"
 #define CURSOR		XC_left_ptr /* default cursor,overrides any custom cursors you may have defined outside the WM. */
 #define CMD_CURSOR	XC_rtl_logo /* cursor to let you know you are in command mode. This is best to differ from CURSOS */
@@ -9,7 +9,7 @@
 #define MOD_MASK 	Mod1Mask /* Modifier key */
 #define KEY_PREFIX	't' /* key to enter command mode */
 #define KEY_WINLIST	'w' /* key to show window list */
-#define KEY_TERMINAL 	'c' /* key to spawn terminal */
+#define KEY_TERMINAL 'c' /* key to spawn terminal */
 #define KEY_KILL	'q' /* key to kill selected window */
 #define KEY_MENU 	'm' /* key to spawn menu */
 #define KEY_PREV	'p' /* select previous window in list */
