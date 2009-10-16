@@ -71,6 +71,6 @@ NEWS:
            - Killing windows now selects the previous (or next, depending on the outcome
              of the previous selection) window.
            - at meth0dz's suggestion, I switched to C99, thus having to mess a bit with the
-             code to even get it to compile. Nothing serious though
+             code to get it to compile. Nothing serious though.
            - Started work on cleaning the ugly switch/case parts that take care of the
-             messaging position. I will transform this into a single function
+             messaging window position. I will transform this into a single function
