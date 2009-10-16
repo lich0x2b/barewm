@@ -12,20 +12,25 @@
 #include <ctype.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <stdbool.h>
 
+/* stuff for c99 compatibility */
+extern FILE *popen (__const char *__command, __const char *__modes) __wur;
+extern int pclose (FILE *__stream);
+#define WAIT_ANY (-1)
 
-#define DEBUG 1
-void catch_timer(int signal);
+/*define this only when playing with the source */
+#define DEBUG 0
 
+/* globals */
 Display 		*display;
 Window 			root;
 Screen 			*screen;
 int 			SCREEN_WIDTH;
 int     		SCREEN_HEIGHT;
-GC 			BARE_GC, BARE_SELECTEDFG_GC, BARE_SELECTEDBG_GC;
+GC 			    BARE_GC, BARE_SELECTEDFG_GC, BARE_SELECTEDBG_GC;
 Colormap 		BARE_colormap = None;
 XFontStruct  * fontstruct;
-
 #define max_windows 999 
 Window windows_container[max_windows];
 Window selected;
@@ -39,21 +44,23 @@ void handle_destroy_event(XEvent *e);
 void handle_expose_event(XEvent *e);
 int handle_x_error(Display *display, XErrorEvent *e);
 void handle_property_event(XEvent *e);
-int init_gc();
+void init_gc(void);
 void spawn(const char *cmd);
 unsigned long name2color(const char *cid);
 void LOG(const char *text, ...);
 void LOG_DEBUG(const char *text, ...);
-void list_windows();
-int get_free_position();
+void list_windows(void);
+int get_free_position(void);
 int free_position(Window window);
 int get_position(Window window);
 int select_window(int window);
-void grab_keyboard();
-int get_prev_window();
-int get_next_window();
+void grab_keyboard(void);
+int get_window(bool nex_prev);
 void message(const char *text, ...);
 void echo_output(char *cmd);
+int TextWidth(XFontStruct *fs, const char *text);
+int TextHeight(XFontStruct *fs);
+void catch_timer(int signal);
 
 Window MESSAGE = None;
 
@@ -81,20 +88,6 @@ void LOG_DEBUG(const char *text, ...)
 		va_end(vl);
 	}
 }
-static void sighandler(int sig)
-{
-	pid_t pid;
-	int status, serrno;
-	if (sig == SIGCHLD) {
-		serrno = errno;
-		while (1) {
-			pid = waitpid(WAIT_ANY, &status, WNOHANG);
-			if (pid <= 0)
-			break;
-		}
-		errno = serrno;
-	}
-}
 
 void spawn(const char *cmd)
 {
@@ -107,7 +100,7 @@ void spawn(const char *cmd)
 
 int TextWidth(XFontStruct *fs, const char *text)
 {
-	if(strlen(text) >= 1 && text != NULL) {
+	if(text != NULL && strlen(text) >= 1) {
 		return XTextWidth(fs, text, strlen(text));
 	} else {
 		return 1;
@@ -120,21 +113,20 @@ int TextHeight(XFontStruct *fs) {
 
 unsigned long name2color(const char *cid)
 {
-	XColor tmpcol;
+        XColor tmpcol;
 
-	if(!XParseColor(display, BARE_colormap, cid, &tmpcol)) {
-		LOG("Cannot allocate \"%s\" color. Defaulting to black!\n", cid);
-		return BlackPixel(display, XDefaultScreen(display));
-	}
-	if(!XAllocColor(display, BARE_colormap, &tmpcol)) {
-		LOG("Cannot allocate \"%s\" color. Defaulting to black!\n", cid);
-		return BlackPixel(display, XDefaultScreen(display));
-	}
-	
-	return tmpcol.pixel;
+        if(XParseColor(display, BARE_colormap, cid, &tmpcol)) {
+                if(XAllocColor(display, BARE_colormap, &tmpcol)) 
+                        return tmpcol.pixel;
+        }
+        
+        LOG("Cannot allocate \"%s\" color. Defaulting to black!\n", cid);
+        return BlackPixel(display, XDefaultScreen(display));
+
+        
 }
 
-int init_gc()
+void init_gc(void)
 {
 	XGCValues gcv;
    	gcv.font = fontstruct->fid;
@@ -148,37 +140,24 @@ int init_gc()
    	BARE_SELECTEDFG_GC = XCreateGC(display, root, GCForeground | GCBackground | GCFunction | GCLineWidth | GCSubwindowMode | GCFont, &gcv);
 	gcv.foreground = name2color(SELBGCOLOR);
 	BARE_SELECTEDBG_GC = XCreateGC(display, root, GCForeground | GCBackground | GCFunction | GCLineWidth | GCSubwindowMode | GCFont, &gcv);
+}
 
-	return 0;
-}
-int get_prev_window()
+int get_window(bool nex_prev)
 {
-	int x;
-	for(x = get_position(selected) - 1; x >= 0; x--)
-	{
-		if(windows_container[x] != None)
-		{
-			LOG_DEBUG("Found previous window at: %d\n", x);
-			return x;
-		}
-	}
+        int x = get_position(selected);
+        nex_prev ? x++ :  x--;
+        while ( x >= 0 && x < max_windows) {
+                if(windows_container[x] != None)
+                {
+                        LOG_DEBUG("Found next window at: %d\n", x);
+                        return x;
+                }
+                nex_prev ? x++ :  x--;
+         }
+         return -1;
+}
 
-	return -1;
-}
-int get_next_window()
-{
-	int x;
-	for(x = get_position(selected) + 1; x < max_windows; x++)
-	{
-		if(windows_container[x] != None)
-		{
-			LOG_DEBUG("Found next window at: %d\n", x);
-			return x;
-		}
-	}
-	return -1;
-}
-void grab_keyboard()
+void grab_keyboard(void)
 {
 	XGrabKey(display, XKeysymToKeycode (display, KEY_PREFIX), MOD_MASK, root, True, GrabModeAsync, GrabModeAsync);
 }
@@ -206,9 +185,9 @@ void echo_output(char *cmd)
 void handle_keypress_event(XEvent * e)
 {
 	XEvent event;
-	XGrabKey(display, AnyKey, AnyModifier, selected, True, GrabModeAsync, GrabModeAsync);
+	XGrabKey(display, AnyKey, AnyModifier, root, True, GrabModeAsync, GrabModeAsync);
     XMaskEvent (display, KeyPressMask, &event);
-	XDefineCursor(display, selected, (XCreateFontCursor(display, CURSOR)));
+	XDefineCursor(display, root, (XCreateFontCursor(display, CURSOR)));
 	unsigned int key = XLookupKeysym((XKeyEvent *) &event, 0);
 	if (key >= '0' && key <= '9')
 	{
@@ -235,32 +214,43 @@ void handle_keypress_event(XEvent * e)
 			}			
 			break;
 		case KEY_KILL:
-			XKillClient(display, selected);
-			selected = root;
+			XDestroyWindow(display, selected);
+            if(get_window(false) != -1){
+			    selected = windows_container[get_window(false)];
+		        XRaiseWindow(display, selected);
+                break;
+            } else if (get_window(true) != -1){
+                selected = windows_container[get_window(true)];
+		        XRaiseWindow(display, selected);
+                break;
+            } else {
+                selected = root;
+                break;
+            }
 			break;
 		case KEY_PREV:
-			if(get_prev_window() != -1){
-				select_window(get_prev_window());
+			if(get_window(false) != -1){
+				select_window(get_window(false));
 			} else {
 				message("Can't access previous window!");
 			}
 			break;
 		case KEY_NEXT:
-			if(get_next_window() != -1)
+			if(get_window(true) != -1)
 			{
-				select_window(get_next_window());
+				select_window(get_window(true));
 			} else {
 				message("Can't access next window!");
 			}
 			break;
-            default:
-                    message("Key \"%c\" is unbound!", (char)key);
+        default:
+                message("Key \"%c\" is unbound!", (char)key);
 	}
-
-	XUngrabKey(display, AnyKey, AnyModifier, selected);
+	XUngrabKey(display, AnyKey, AnyModifier, root);
 	grab_keyboard();
 	XSetInputFocus (display, selected, RevertToParent, CurrentTime);
 }
+
 void message(const char *text, ...)
 {
 	char tmp[256];
@@ -312,9 +302,9 @@ void message(const char *text, ...)
 }
 
 
-void list_windows()
+void list_windows(void)
 {
-	int th, ypos, x;
+	int th, ypos;
     th = TextHeight(fontstruct);
 	ypos = 0 + th - fontstruct->max_bounds.descent;
 	char *tmp;
@@ -325,7 +315,7 @@ void list_windows()
 	Window root_return;
 	int char_width = TextWidth(fontstruct, " ");
 
- 	for (x = 0; x< max_windows; x++)
+ 	for (int x = 0; x< max_windows; x++)
 	{
 		if(windows_container[x] != None)
 		{
@@ -336,7 +326,7 @@ void list_windows()
 					{
 						number++;
 						sprintf(title, "%d - %s", get_position(windows_container[x]), tmp);
-						if(strlen(title) > max_title) max_title = strlen(title);
+						max_title = strlen(title);
 						title[0] = 0;	
 					}
 				}
@@ -379,7 +369,7 @@ void list_windows()
 		XSetWindowBorder(display, MESSAGE, name2color(SELBGCOLOR));		
 		XMapRaised(display, MESSAGE);
 
-		for (x = 0; x< max_windows; x++)
+		for (int x = 0; x< max_windows; x++)
 		{
 			if(windows_container[x] != None)
 			{
@@ -425,10 +415,9 @@ int select_window(int window)
 	}
 }
 
-int get_free_position()
+int get_free_position(void)
 {
-	int x;
-	for(x = 0; x < max_windows; x++)
+	for(int x = 0; x < max_windows; x++)
 	{
 		if(windows_container[x] == None)
 		{
@@ -440,8 +429,7 @@ int get_free_position()
 }
 int get_position(Window window)
 {
-	int x;
-	for(x = 0; x < max_windows; x++)
+	for(int x = 0; x < max_windows; x++)
 	{
 		if(windows_container[x] == window)
 		{
@@ -454,8 +442,7 @@ int get_position(Window window)
 
 int free_position(Window window)
 {
-	int x;
-	for(x = 0; x < max_windows; x++)
+	for(int x = 0; x < max_windows; x++)
 	{
 		if(windows_container[x] == window)
 		{
@@ -516,7 +503,7 @@ int handle_x_error(Display *display, XErrorEvent *e)
 	return 0;
 }
 
-void main_loop()
+void main_loop(void)
 {
 	XEvent event;
 	XSetErrorHandler(handle_x_error); //Ignore X errors otherwise the WM would crash every other minute :)
@@ -531,7 +518,7 @@ void main_loop()
 			if ((XKeycodeToKeysym(display, event.xkey.keycode, 0) == KEY_PREFIX) && (event.xkey.state & MOD_MASK))
 			{       
 				LOG_DEBUG("Switching to command mode\n");
-				XDefineCursor(display, selected, (XCreateFontCursor(display, CMD_CURSOR)));
+				XDefineCursor(display, root, (XCreateFontCursor(display, CMD_CURSOR)));
 				handle_keypress_event(&event);
 			}
 			break;
@@ -559,8 +546,6 @@ void main_loop()
 
 int main(int argc, char *argv[])
 {
-	struct sigaction act;
-
 	if(!(display = XOpenDisplay(DISPLAY))){
 		LOG("BARE: cannot open display! Ending session.\n");
 		return -1;
@@ -600,12 +585,6 @@ int main(int argc, char *argv[])
 	BARE_colormap = DefaultColormap(display, 0);
 	init_gc();
 	message("Welcome to Bare WM v%s", VERSION);
-	
-	act.sa_handler = sighandler;
-	sigemptyset(&act.sa_mask);
-	act.sa_flags = SA_NOCLDSTOP | SA_RESTART ;
-	sigaction(SIGCHLD, &act, NULL);
-
 	
 	main_loop();
 
